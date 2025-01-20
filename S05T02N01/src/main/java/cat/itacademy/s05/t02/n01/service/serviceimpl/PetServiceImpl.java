@@ -2,12 +2,13 @@ package cat.itacademy.s05.t02.n01.service.serviceimpl;
 
 import cat.itacademy.s05.t02.n01.dto.request.CreatePetRequest;
 import cat.itacademy.s05.t02.n01.dto.request.PetUpdateRequest;
-import cat.itacademy.s05.t02.n01.dto.response.PetResponse;
-import cat.itacademy.s05.t02.n01.dto.response.PetInfo;
+import cat.itacademy.s05.t02.n01.dto.response.PetResponseDto;
 import cat.itacademy.s05.t02.n01.enums.Accessories;
 import cat.itacademy.s05.t02.n01.enums.Locations;
+import cat.itacademy.s05.t02.n01.enums.Role;
 import cat.itacademy.s05.t02.n01.exception.custom.InvalidPetInteraction;
 import cat.itacademy.s05.t02.n01.exception.custom.PetNotFoundException;
+import cat.itacademy.s05.t02.n01.exception.custom.UnauthorizedActionException;
 import cat.itacademy.s05.t02.n01.exception.custom.UserNotFoundException;
 import cat.itacademy.s05.t02.n01.model.Pet;
 import cat.itacademy.s05.t02.n01.model.User;
@@ -17,6 +18,7 @@ import cat.itacademy.s05.t02.n01.service.PetService;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.security.core.Authentication;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
@@ -70,7 +72,7 @@ public class PetServiceImpl implements PetService {
 
 
     @Override
-    public PetInfo createPet(CreatePetRequest petRequest) {
+    public PetResponseDto createPet(CreatePetRequest petRequest) {
         User user = userRepository.findById(petRequest.getUserId())
                 .orElseThrow(() -> new UserNotFoundException("User not Found."));
 
@@ -94,25 +96,30 @@ public class PetServiceImpl implements PetService {
     }
 
     @Override
-    public void deletePet(Integer petId) {
+    public void deletePet(Integer petId, Authentication authentication) {
         Pet pet = petRepository.findById(petId)
                 .orElseThrow(() -> new PetNotFoundException("Pet with id " + petId + " not found."));
 
+        if(!isOwnerOrAdmin(pet,authentication)){
+            throw new UnauthorizedActionException("You don't have authorization to do this action.");
+        }
         petRepository.delete(pet);
     }
 
     @Override
-    public PetInfo getOnePet(Integer userId, Integer petId) {
-        User user = userRepository.findById(userId)
-                .orElseThrow(() -> new UserNotFoundException("User with id " + userId + ", not found."));
-        Pet pet = petRepository.findByIdAndUser_Id(petId, userId)
-                .orElseThrow(() -> new PetNotFoundException("User with id " + userId + ", does not have" +
-                        "any pet with id " + petId));
+    public PetResponseDto getOnePet(Integer petId, Authentication authentication) {
+        Pet pet = petRepository.findById(petId)
+                .orElseThrow(() -> new PetNotFoundException("There's not any pet with id " + petId));
+
+        if (!isOwnerOrAdmin(pet, authentication)) {
+            throw new UnauthorizedActionException("You are not allowed to view this pet.");
+        }
+
         return mapPetInfo(pet);
     }
 
     @Override
-    public List<PetInfo> getUserAllPets(Integer userId) {
+    public List<PetResponseDto> getUserAllPets(Integer userId) {
         User user = userRepository.findById(userId)
                 .orElseThrow(() -> new UserNotFoundException("User with id " + userId + ", not found."));
 
@@ -126,7 +133,7 @@ public class PetServiceImpl implements PetService {
     }
 
     @Override
-    public List<PetInfo> getAllPets() {
+    public List<PetResponseDto> getAllPets() {
         List<Pet> allPets = petRepository.findAll();
 
         if(allPets.isEmpty()){
@@ -137,10 +144,13 @@ public class PetServiceImpl implements PetService {
     }
 
     @Override
-    public PetInfo updatePet(Integer petId, Integer userId, PetUpdateRequest updateRequest) {
-        Pet pet = petRepository.findByIdAndUser_Id(petId, userId)
-                .orElseThrow(() -> new PetNotFoundException("User with id " + userId +
-                        ", does not have any pet with id " + petId));
+    public PetResponseDto updatePet(Integer petId, PetUpdateRequest updateRequest, Authentication authentication) {
+        Pet pet = petRepository.findById(petId)
+                .orElseThrow(() -> new PetNotFoundException("There's not any pet with id " + petId));
+
+        if (!isOwnerOrAdmin(pet, authentication)) {
+            throw new UnauthorizedActionException("You are not allowed to update this pet.");
+        }
 
         if (pet.isAsleep() && updateRequest.getPetInteraction() != null) {
             pet.setAsleep(false);
@@ -178,8 +188,8 @@ public class PetServiceImpl implements PetService {
     }
 
     //TODO --> map petDTO
-    private PetInfo mapPetInfo(Pet newPet) {
-        PetInfo petInfo = new PetInfo();
+    private PetResponseDto mapPetInfo(Pet newPet) {
+        PetResponseDto petInfo = new PetResponseDto();
         petInfo.setPetId(newPet.getId());
         petInfo.setPetName(newPet.getPetName());
         petInfo.setPetType(newPet.getPetType());
@@ -195,8 +205,11 @@ public class PetServiceImpl implements PetService {
         return petInfo;
     }
 
-    public boolean isOwner(Integer userId, Integer petId) {
-        Pet pet = petRepository.findById(petId).orElseThrow(() -> new PetNotFoundException("Pet not found"));
-        return pet.getUser().getId().equals(userId);
+    public boolean isOwnerOrAdmin(Pet pet, Authentication authentication) {
+        String userName = authentication.getName();
+        User user = userRepository.findByUserName(userName)
+                .orElseThrow(() -> new UserNotFoundException("User not found"));
+        Integer userId = user.getId();
+        return pet.getUser().getId().equals(userId) || user.getRole().equals(Role.ADMIN);
     }
 }

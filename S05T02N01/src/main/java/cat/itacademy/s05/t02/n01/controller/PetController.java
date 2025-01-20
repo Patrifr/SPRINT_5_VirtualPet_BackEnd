@@ -2,7 +2,8 @@ package cat.itacademy.s05.t02.n01.controller;
 
 import cat.itacademy.s05.t02.n01.dto.request.CreatePetRequest;
 import cat.itacademy.s05.t02.n01.dto.request.PetUpdateRequest;
-import cat.itacademy.s05.t02.n01.dto.response.PetInfo;
+import cat.itacademy.s05.t02.n01.dto.response.PetResponse;
+import cat.itacademy.s05.t02.n01.dto.response.PetResponseDto;
 import cat.itacademy.s05.t02.n01.service.serviceimpl.PetServiceImpl;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -21,42 +22,41 @@ public class PetController {
     private final PetServiceImpl petService;
 
     @PostMapping("/new")
-    public ResponseEntity<PetInfo> createPet(@RequestBody CreatePetRequest petRequest){
-        PetInfo newPet = petService.createPet(petRequest);
+    public ResponseEntity<PetResponseDto> createPet(@RequestBody CreatePetRequest petRequest){
+        PetResponseDto newPet = petService.createPet(petRequest);
         return new ResponseEntity<>(newPet, HttpStatus.CREATED);
     }
 
-    @PreAuthorize("hasRole('ADMIN') or @petService.isOwner(#userId, #petId)")
     @DeleteMapping("/delete")
     public ResponseEntity<Void> deletePet(@RequestParam Integer petId, Authentication authentication){
-        petService.deletePet(petId);
+        petService.deletePet(petId, authentication);
         return ResponseEntity.noContent().build();
     }
 
     @GetMapping("/get")
-    public ResponseEntity<PetInfo> getOnePetFromUser(@RequestParam Integer userId, @RequestParam Integer petId){
-        PetInfo petResponse = petService.getOnePet(userId, petId);
+    public ResponseEntity<PetResponseDto> getOnePetFromUser(@RequestParam Integer petId, Authentication authentication){
+        PetResponseDto petResponse = petService.getOnePet(petId, authentication);
         return ResponseEntity.ok(petResponse);
     }
 
     @GetMapping("/getUserPets")
-    public ResponseEntity<List<PetInfo>> getAllPetsFromUser(@RequestParam Integer userId){
-        List<PetInfo> pets = petService.getUserAllPets(userId);
+    public ResponseEntity<List<PetResponseDto>> getAllPetsFromUser(@RequestParam Integer userId){
+        List<PetResponseDto> pets = petService.getUserAllPets(userId);
         return ResponseEntity.ok(pets);
     }
 
     @PreAuthorize("hasRole('ADMIN')")
     @GetMapping("/getAll")
-    public ResponseEntity<List<PetInfo>> getAllPets(){
-        List<PetInfo> pets = petService.getAllPets();
+    public ResponseEntity<List<PetResponseDto>> getAllPets(){
+        List<PetResponseDto> pets = petService.getAllPets();
 
         return ResponseEntity.ok(pets);
     }
 
     @PutMapping("/update")
-    public ResponseEntity<PetInfo> updatePet(@RequestParam Integer userId, @RequestParam Integer petId,
-        @RequestBody PetUpdateRequest petRequest) {
-        PetInfo updatedPetResponse = petService.updatePet(petId, userId, petRequest);
+    public ResponseEntity<PetResponseDto> updatePet
+    (@RequestParam Integer petId, @RequestBody PetUpdateRequest updateRequest, Authentication authentication) {
+        PetResponseDto updatedPetResponse = petService.updatePet(petId, updateRequest, authentication);
         return ResponseEntity.ok(updatedPetResponse);
     }
 }
